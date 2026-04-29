@@ -25,21 +25,41 @@ For each clone it:
 
 ## Usage
 
-### 1. Transfer the script from your local machine to ESXi
+ESXi cannot reach GitHub directly (outbound TCP 443 is typically firewalled).  
+Transfer the script from your machine first, then run it on ESXi.
 
-ESXi cannot reach GitHub directly (outbound TCP 443 is typically firewalled). Run this **on your local machine**:
+---
+
+### Windows (PowerShell)
+
+```powershell
+curl.exe -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh -o "$env:TEMP\clone-vm.sh"
+scp "$env:TEMP\clone-vm.sh" root@<esxi-ip>:/tmp/clone-vm.sh
+```
+
+> Requires Windows 10 / 11 (OpenSSH and curl.exe are built in).
+
+---
+
+### macOS / Linux
 
 ```sh
 curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh | ssh root@<esxi-ip> "cat > /tmp/clone-vm.sh"
 ```
 
-### 2. Run it on ESXi
+---
+
+### Run on ESXi
+
+After transfer, SSH in and run:
 
 ```sh
 sh /tmp/clone-vm.sh
 ```
 
-### 3. Follow the prompts
+---
+
+## Prompts walkthrough
 
 ```
 Available datastores:
