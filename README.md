@@ -1,6 +1,6 @@
 # esxi-templates
 
-A single Bash script that clones an ESXi VM from a template — up to 15 copies in one run.
+A shell script that clones an ESXi VM from a template — up to 15 copies in one run. Written in pure POSIX `sh`, no bash required.
 
 For each clone it:
 1. Copies the disk with `vmkfstools` (preserves / re-provisions)
@@ -17,7 +17,7 @@ For each clone it:
 | ESXi 6.x / 7.x / 8.x | Script must run **on the ESXi shell**, not a remote client |
 | `vmkfstools` | Built into ESXi |
 | `vim-cmd` | Built into ESXi |
-| Bash ≥ 4 | `/bin/bash` on ESXi 6.5+ is sufficient |
+| `/bin/sh` | Built into ESXi (busybox ash — no bash needed) |
 
 > **The template VM must be powered off before running the script.**
 
@@ -25,26 +25,19 @@ For each clone it:
 
 ## Usage
 
-### 1. SSH into the ESXi host
+### 1. Transfer the script from your local machine to ESXi
+
+ESXi cannot reach GitHub directly (outbound TCP 443 is typically firewalled). Run this **on your local machine**:
 
 ```sh
-ssh root@<esxi-ip>
+curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh | ssh root@<esxi-ip> "cat > /tmp/clone-vm.sh"
 ```
 
-### 2. Run — no download needed
-
-Single command, works on any ESXi version regardless of which tools are available:
+### 2. Run it on ESXi
 
 ```sh
-python -c "
-import ssl; ctx = ssl._create_unverified_context()
-try: from urllib.request import urlopen
-except ImportError: from urllib2 import urlopen
-open('/tmp/clone-vm.sh','wb').write(urlopen('https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh', context=ctx).read())
-" && bash /tmp/clone-vm.sh
+sh /tmp/clone-vm.sh
 ```
-
-This auto-detects Python 2 (`urllib2`) vs Python 3 (`urllib.request`), skips SSL verification (ESXi's CA bundle is incomplete and causes hangs), and fetches without relying on `curl` or `wget`.
 
 ### 3. Follow the prompts
 
@@ -65,7 +58,7 @@ How many clones to create (1-15): 3
   Name for clone 3: LERN-ST-TEST-03
 
 Disk provisioning:
-  [1] eagerzeroedthick  (pre-zeroed thick — recommended for production)
+  [1] eagerzeroedthick  (pre-zeroed thick - recommended for production)
   [2] zeroedthick       (lazy-zeroed thick)
   [3] thin              (thin provisioned)
 Select [1-3, default=1]: 1
