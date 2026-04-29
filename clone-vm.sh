@@ -11,7 +11,6 @@ VIMCMD=/bin/vim-cmd
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
-
 DS_FILE=/tmp/_esxi_ds.$$
 FOLDER_FILE=/tmp/_esxi_folders.$$
 NAMES_FILE=/tmp/_esxi_names.$$
@@ -35,25 +34,52 @@ case "$DS_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
 [ "$DS_IDX" -lt "$DS_COUNT" ] || die "Invalid selection"
 DATASTORE=$(sed -n "$((DS_IDX+1))p" "$DS_FILE")
 
-# ── select template VM folder ─────────────────────────────────────────────────
-find "$DATASTORE" -mindepth 1 -maxdepth 1 -type d | sort > "$FOLDER_FILE"
-FOLDER_COUNT=$(wc -l < "$FOLDER_FILE")
-[ "$FOLDER_COUNT" -gt 0 ] || die "No VM folders found in $DATASTORE"
+# ── navigate to template VM (recursive folder browser) ───────────────────────
+NAV_DIR="$DATASTORE"
+TPL_DIR=""
 
-printf '\nVM folders in %s:\n' "$(basename "$DATASTORE")"
-i=0
-while IFS= read -r folder; do
-  printf '  [%d] %s\n' "$i" "$(basename "$folder")"
-  i=$((i+1))
-done < "$FOLDER_FILE"
+while [ -z "$TPL_DIR" ]; do
+  find "$NAV_DIR" -mindepth 1 -maxdepth 1 -type d | sort > "$FOLDER_FILE"
+  FOLDER_COUNT=$(wc -l < "$FOLDER_FILE")
+  VMX_HERE=$(find "$NAV_DIR" -maxdepth 1 -name '*.vmx' 2>/dev/null | head -1)
 
-printf 'Select template VM [0-%d]: ' "$((FOLDER_COUNT-1))"
-read -r TPL_IDX
-case "$TPL_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
-[ "$TPL_IDX" -lt "$FOLDER_COUNT" ] || die "Invalid selection"
-TPL_DIR=$(sed -n "$((TPL_IDX+1))p" "$FOLDER_FILE")
+  printf '\nLocation: %s\n' "$NAV_DIR"
+
+  TOTAL_OPTS=0
+  if [ -n "$VMX_HERE" ]; then
+    printf '  [0] *** Use this folder as template ***\n'
+    i=1
+    while IFS= read -r folder; do
+      printf '  [%d] %s\n' "$i" "$(basename "$folder")"
+      i=$((i+1))
+    done < "$FOLDER_FILE"
+    TOTAL_OPTS=$((1 + FOLDER_COUNT))
+  else
+    i=0
+    while IFS= read -r folder; do
+      printf '  [%d] %s\n' "$i" "$(basename "$folder")"
+      i=$((i+1))
+    done < "$FOLDER_FILE"
+    TOTAL_OPTS=$FOLDER_COUNT
+  fi
+
+  [ "$TOTAL_OPTS" -gt 0 ] || die "No subfolders and no VM found in $NAV_DIR"
+
+  printf 'Select [0-%d]: ' "$((TOTAL_OPTS-1))"
+  read -r SEL
+  case "$SEL" in ''|*[!0-9]*) die "Invalid selection" ;; esac
+  [ "$SEL" -lt "$TOTAL_OPTS" ] || die "Invalid selection"
+
+  if [ -n "$VMX_HERE" ] && [ "$SEL" -eq 0 ]; then
+    TPL_DIR="$NAV_DIR"
+  elif [ -n "$VMX_HERE" ]; then
+    NAV_DIR=$(sed -n "${SEL}p" "$FOLDER_FILE")
+  else
+    NAV_DIR=$(sed -n "$((SEL+1))p" "$FOLDER_FILE")
+  fi
+done
+
 TPL_NAME=$(basename "$TPL_DIR")
-
 TPL_VMX=$(find  "$TPL_DIR" -maxdepth 1 -name '*.vmx'                        | head -1)
 TPL_VMDK=$(find "$TPL_DIR" -maxdepth 1 -name '*.vmdk' ! -name '*-flat.vmdk' | head -1)
 [ -f "$TPL_VMX"  ] || die "No .vmx found in $TPL_DIR"
@@ -105,12 +131,10 @@ while IFS= read -r CLONE_NAME; do
 
   mkdir -p "$DEST_DIR"
 
-  # 1. copy vmdk via vmkfstools
   DEST_VMDK="$DEST_DIR/${CLONE_NAME}.vmdk"
   log "    vmkfstools ($PROV) ..."
   "$VMKFSTOOLS" -i "$TPL_VMDK" "$DEST_VMDK" -d "$PROV"
 
-  # 2. copy supporting files (nvram, vmsd, vmxf, ...), rename on the fly
   for src in "$TPL_DIR"/*; do
     [ -f "$src" ] || continue
     ext="${src##*.}"
@@ -123,7 +147,6 @@ while IFS= read -r CLONE_NAME; do
     log "    cp $base -> $dest_file"
   done
 
-  # 3. patch vmx
   DEST_VMX="$DEST_DIR/${CLONE_NAME}.vmx"
   sed \
     -e "s|displayName = \".*\"|displayName = \"${CLONE_NAME}\"|g" \
@@ -133,7 +156,6 @@ while IFS= read -r CLONE_NAME; do
     "$TPL_VMX" > "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
-  # 4. register in ESXi
   VMID=$("$VIMCMD" solo/registervm "$DEST_VMX")
   log "    Registered VM ID: $VMID"
 
