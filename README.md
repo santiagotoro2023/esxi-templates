@@ -37,13 +37,14 @@ Single command, works on any ESXi version regardless of which tools are availabl
 
 ```sh
 python -c "
+import ssl; ctx = ssl._create_unverified_context()
 try: from urllib.request import urlopen
 except ImportError: from urllib2 import urlopen
-open('/tmp/clone-vm.sh','wb').write(urlopen('https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh').read())
+open('/tmp/clone-vm.sh','wb').write(urlopen('https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh', context=ctx).read())
 " && bash /tmp/clone-vm.sh
 ```
 
-This auto-detects Python 2 (`urllib2`) vs Python 3 (`urllib.request`) and fetches the script over HTTPS without relying on `curl` or `wget`, neither of which is reliably available on ESXi.
+This auto-detects Python 2 (`urllib2`) vs Python 3 (`urllib.request`), skips SSL verification (ESXi's CA bundle is incomplete and causes hangs), and fetches without relying on `curl` or `wget`.
 
 ### 3. Follow the prompts
 
