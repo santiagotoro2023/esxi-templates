@@ -80,10 +80,13 @@ while [ -z "$TPL_DIR" ]; do
 done
 
 TPL_NAME=$(basename "$TPL_DIR")
+TPL_PARENT=$(dirname "$TPL_DIR")
 TPL_VMX=$(find  "$TPL_DIR" -maxdepth 1 -name '*.vmx'                        | head -1)
 TPL_VMDK=$(find "$TPL_DIR" -maxdepth 1 -name '*.vmdk' ! -name '*-flat.vmdk' | head -1)
 [ -f "$TPL_VMX"  ] || die "No .vmx found in $TPL_DIR"
 [ -f "$TPL_VMDK" ] || die "No .vmdk descriptor found in $TPL_DIR"
+# base name of the vmdk file itself (e.g. LERN-ST-IMG-01, not the folder LERN-ST-IMG-21)
+VMDK_BASE=$(basename "$TPL_VMDK" .vmdk)
 
 # ── number of clones ──────────────────────────────────────────────────────────
 printf '\nHow many clones to create (1-15): '
@@ -100,7 +103,7 @@ while [ "$i" -le "$CLONE_COUNT" ]; do
   printf '  Name for clone %d: ' "$i"
   read -r cname
   [ -n "$cname" ] || die "Name cannot be empty"
-  [ ! -d "$DATASTORE/$cname" ] || die "Folder '$DATASTORE/$cname' already exists"
+  [ ! -d "$TPL_PARENT/$cname" ] || die "Folder '$TPL_PARENT/$cname' already exists"
   printf '%s\n' "$cname" >> "$NAMES_FILE"
   i=$((i+1))
 done
@@ -126,7 +129,7 @@ printf '\n'
 
 # ── clone loop ────────────────────────────────────────────────────────────────
 while IFS= read -r CLONE_NAME; do
-  DEST_DIR="$DATASTORE/$CLONE_NAME"
+  DEST_DIR="$TPL_PARENT/$CLONE_NAME"
   log ">>> Starting clone: $TPL_NAME  ->  $CLONE_NAME"
 
   mkdir -p "$DEST_DIR"
@@ -142,7 +145,7 @@ while IFS= read -r CLONE_NAME; do
     case "$ext" in
       vmdk|vmx|log|lck) continue ;;
     esac
-    dest_file=$(printf '%s' "$base" | sed "s/${TPL_NAME}/${CLONE_NAME}/g")
+    dest_file=$(printf '%s' "$base" | sed "s/${VMDK_BASE}/${CLONE_NAME}/g")
     cp "$src" "$DEST_DIR/$dest_file"
     log "    cp $base -> $dest_file"
   done
@@ -150,9 +153,9 @@ while IFS= read -r CLONE_NAME; do
   DEST_VMX="$DEST_DIR/${CLONE_NAME}.vmx"
   sed \
     -e "s|displayName = \".*\"|displayName = \"${CLONE_NAME}\"|g" \
-    -e "s|${TPL_NAME}\.vmdk|${CLONE_NAME}.vmdk|g" \
-    -e "s|nvram = \"${TPL_NAME}|nvram = \"${CLONE_NAME}|g" \
-    -e "s|extendedConfigFile = \"${TPL_NAME}|extendedConfigFile = \"${CLONE_NAME}|g" \
+    -e "s|${VMDK_BASE}\.vmdk|${CLONE_NAME}.vmdk|g" \
+    -e "s|nvram = \"${VMDK_BASE}|nvram = \"${CLONE_NAME}|g" \
+    -e "s|extendedConfigFile = \"${VMDK_BASE}|extendedConfigFile = \"${CLONE_NAME}|g" \
     "$TPL_VMX" > "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
