@@ -25,26 +25,27 @@ For each clone it:
 
 ## Usage
 
-### 1. Upload the script to the ESXi host
-
-```sh
-scp clone-vm.sh root@<esxi-ip>:/vmfs/volumes/<datastore>/clone-vm.sh
-```
-
-### 2. SSH into the ESXi host
+### 1. SSH into the ESXi host
 
 ```sh
 ssh root@<esxi-ip>
 ```
 
-### 3. Make it executable and run
+### 2. Run — no download needed
 
 ```sh
-chmod +x /vmfs/volumes/<datastore>/clone-vm.sh
-/vmfs/volumes/<datastore>/clone-vm.sh
+bash <(curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh)
 ```
 
-### 4. Follow the prompts
+> If `curl` is not available (older ESXi), use `wget`:
+> ```sh
+> bash <(wget -qO- https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh)
+> ```
+
+> **Why `bash <(...)` and not `curl ... | bash`?**
+> Piping into bash closes stdin, which breaks the interactive prompts. Process substitution keeps stdin on your terminal.
+
+### 3. Follow the prompts
 
 ```
 Available datastores:
