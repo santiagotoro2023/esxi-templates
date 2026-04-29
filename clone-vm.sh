@@ -8,6 +8,8 @@ set -eu
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
+export PATH="/sbin:/bin:/usr/bin:$PATH"
+
 command -v vmkfstools >/dev/null 2>&1 || die "vmkfstools not found — run this on an ESXi shell"
 command -v vim-cmd    >/dev/null 2>&1 || die "vim-cmd not found — run this on an ESXi shell"
 
