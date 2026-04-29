@@ -34,16 +34,16 @@ ssh root@<esxi-ip>
 ### 2. Run — no download needed
 
 ```sh
-bash <(curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh)
+curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh > /tmp/clone-vm.sh && bash /tmp/clone-vm.sh
 ```
 
 > If `curl` is not available (older ESXi), use `wget`:
 > ```sh
-> bash <(wget -qO- https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh)
+> wget -qO /tmp/clone-vm.sh https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh && bash /tmp/clone-vm.sh
 > ```
 
-> **Why `bash <(...)` and not `curl ... | bash`?**
-> Piping into bash closes stdin, which breaks the interactive prompts. Process substitution keeps stdin on your terminal.
+> **Why not `curl ... | bash`?**
+> ESXi's default shell is `ash` (busybox). Piping into bash closes stdin and breaks all interactive prompts. Writing to `/tmp` first keeps stdin on your terminal.
 
 ### 3. Follow the prompts
 
