@@ -33,17 +33,17 @@ ssh root@<esxi-ip>
 
 ### 2. Run — no download needed
 
+Single command, works on any ESXi version regardless of which tools are available:
+
 ```sh
-curl -sSL https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh > /tmp/clone-vm.sh && bash /tmp/clone-vm.sh
+python -c "
+try: from urllib.request import urlopen
+except ImportError: from urllib2 import urlopen
+open('/tmp/clone-vm.sh','wb').write(urlopen('https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh').read())
+" && bash /tmp/clone-vm.sh
 ```
 
-> If `curl` is not available (older ESXi), use `wget`:
-> ```sh
-> wget -qO /tmp/clone-vm.sh https://raw.githubusercontent.com/santiagotoro2023/esxi-templates/main/clone-vm.sh && bash /tmp/clone-vm.sh
-> ```
-
-> **Why not `curl ... | bash`?**
-> ESXi's default shell is `ash` (busybox). Piping into bash closes stdin and breaks all interactive prompts. Writing to `/tmp` first keeps stdin on your terminal.
+This auto-detects Python 2 (`urllib2`) vs Python 3 (`urllib.request`) and fetches the script over HTTPS without relying on `curl` or `wget`, neither of which is reliably available on ESXi.
 
 ### 3. Follow the prompts
 
