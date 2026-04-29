@@ -11,8 +11,6 @@ VIMCMD=/bin/vim-cmd
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
-[ -x "$VMKFSTOOLS" ] || die "vmkfstools not found at $VMKFSTOOLS — run this on an ESXi shell"
-[ -x "$VIMCMD"     ] || die "vim-cmd not found at $VIMCMD — run this on an ESXi shell"
 
 DS_FILE=/tmp/_esxi_ds.$$
 FOLDER_FILE=/tmp/_esxi_folders.$$
