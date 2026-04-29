@@ -4,14 +4,15 @@
 
 set -eu
 
+VMKFSTOOLS=/bin/vmkfstools
+VIMCMD=/bin/vim-cmd
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
-export PATH="/sbin:/bin:/usr/bin:$PATH"
-
-command -v vmkfstools >/dev/null 2>&1 || die "vmkfstools not found — run this on an ESXi shell"
-command -v vim-cmd    >/dev/null 2>&1 || die "vim-cmd not found — run this on an ESXi shell"
+[ -x "$VMKFSTOOLS" ] || die "vmkfstools not found at $VMKFSTOOLS — run this on an ESXi shell"
+[ -x "$VIMCMD"     ] || die "vim-cmd not found at $VIMCMD — run this on an ESXi shell"
 
 DS_FILE=/tmp/_esxi_ds.$$
 FOLDER_FILE=/tmp/_esxi_folders.$$
@@ -109,7 +110,7 @@ while IFS= read -r CLONE_NAME; do
   # 1. copy vmdk via vmkfstools
   DEST_VMDK="$DEST_DIR/${CLONE_NAME}.vmdk"
   log "    vmkfstools ($PROV) ..."
-  vmkfstools -i "$TPL_VMDK" "$DEST_VMDK" -d "$PROV"
+  "$VMKFSTOOLS" -i "$TPL_VMDK" "$DEST_VMDK" -d "$PROV"
 
   # 2. copy supporting files (nvram, vmsd, vmxf, ...), rename on the fly
   for src in "$TPL_DIR"/*; do
@@ -135,7 +136,7 @@ while IFS= read -r CLONE_NAME; do
   log "    vmx patched -> $DEST_VMX"
 
   # 4. register in ESXi
-  VMID=$(vim-cmd solo/registervm "$DEST_VMX")
+  VMID=$("$VIMCMD" solo/registervm "$DEST_VMX")
   log "    Registered VM ID: $VMID"
 
   log ">>> Done: $CLONE_NAME"
