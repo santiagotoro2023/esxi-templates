@@ -153,9 +153,9 @@ while IFS= read -r CLONE_NAME; do
   DEST_VMX="$DEST_DIR/${CLONE_NAME}.vmx"
   sed \
     -e "s|displayName = \".*\"|displayName = \"${CLONE_NAME}\"|g" \
-    -e "s|${VMDK_BASE}\.vmdk|${CLONE_NAME}.vmdk|g" \
-    -e "s|nvram = \"${VMDK_BASE}|nvram = \"${CLONE_NAME}|g" \
-    -e "s|extendedConfigFile = \"${VMDK_BASE}|extendedConfigFile = \"${CLONE_NAME}|g" \
+    -e "s|\"[^\"]*${VMDK_BASE}\.vmdk\"|\"${CLONE_NAME}.vmdk\"|g" \
+    -e "s|nvram = \"[^\"]*${VMDK_BASE}[^\"]*\"|nvram = \"${CLONE_NAME}.nvram\"|g" \
+    -e "s|extendedConfigFile = \"[^\"]*${VMDK_BASE}[^\"]*\"|extendedConfigFile = \"${CLONE_NAME}.vmxf\"|g" \
     "$TPL_VMX" > "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
