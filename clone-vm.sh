@@ -15,12 +15,69 @@ FOLDER_FILE=/tmp/_esxi_folders.$$
 NAMES_FILE=/tmp/_esxi_names.$$
 trap 'rm -f "$DS_FILE" "$FOLDER_FILE" "$NAMES_FILE"' EXIT
 
-# ── select datastore ─────────────────────────────────────────────────────────
+# ── browse_dir: interactive folder browser ────────────────────────────────────
+# Usage: browse_dir <start_dir> <stop_mode>
+#   stop_mode=vmx   — offer "use this folder" only when a .vmx is present
+#   stop_mode=any   — always offer "use this folder" option
+# Prints the selected path to stdout; all prompts go to /dev/tty
+browse_dir() {
+  _bd_dir="$1"
+  _bd_mode="$2"
+
+  while true; do
+    find "$_bd_dir" -mindepth 1 -maxdepth 1 -type d | sort > "$FOLDER_FILE"
+    _bd_fc=$(wc -l < "$FOLDER_FILE")
+
+    if [ "$_bd_mode" = "vmx" ]; then
+      _bd_vmx=$(find "$_bd_dir" -maxdepth 1 -name '*.vmx' 2>/dev/null | head -1)
+    else
+      _bd_vmx="yes"   # always show the "use this folder" option
+    fi
+
+    printf '\nLocation: %s\n' "$_bd_dir" >/dev/tty
+
+    _bd_total=0
+    if [ -n "$_bd_vmx" ]; then
+      printf '  [0] *** Use this folder ***\n' >/dev/tty
+      _bd_i=1
+      while IFS= read -r _bd_f; do
+        printf '  [%d] %s\n' "$_bd_i" "$(basename "$_bd_f")" >/dev/tty
+        _bd_i=$((_bd_i+1))
+      done < "$FOLDER_FILE"
+      _bd_total=$((1 + _bd_fc))
+    else
+      _bd_i=0
+      while IFS= read -r _bd_f; do
+        printf '  [%d] %s\n' "$_bd_i" "$(basename "$_bd_f")" >/dev/tty
+        _bd_i=$((_bd_i+1))
+      done < "$FOLDER_FILE"
+      _bd_total=$_bd_fc
+    fi
+
+    [ "$_bd_total" -gt 0 ] || die "No subfolders and no VM found in $_bd_dir"
+
+    printf 'Select [0-%d]: ' "$((_bd_total-1))" >/dev/tty
+    read -r _bd_sel </dev/tty
+    case "$_bd_sel" in ''|*[!0-9]*) die "Invalid selection" ;; esac
+    [ "$_bd_sel" -lt "$_bd_total" ] || die "Invalid selection"
+
+    if [ -n "$_bd_vmx" ] && [ "$_bd_sel" -eq 0 ]; then
+      printf '%s' "$_bd_dir"
+      return
+    elif [ -n "$_bd_vmx" ]; then
+      _bd_dir=$(sed -n "${_bd_sel}p" "$FOLDER_FILE")
+    else
+      _bd_dir=$(sed -n "$((_bd_sel+1))p" "$FOLDER_FILE")
+    fi
+  done
+}
+
+# ── select source datastore ───────────────────────────────────────────────────
 find /vmfs/volumes -mindepth 1 -maxdepth 1 -type d -not -type l 2>/dev/null | sort > "$DS_FILE"
 DS_COUNT=$(wc -l < "$DS_FILE")
 [ "$DS_COUNT" -gt 0 ] || die "No datastores found under /vmfs/volumes"
 
-printf '\nAvailable datastores:\n'
+printf '\n=== SOURCE: select datastore ===\n'
 i=0
 while IFS= read -r ds; do
   printf '  [%d] %s\n' "$i" "$ds"
@@ -31,61 +88,36 @@ printf 'Select datastore [0-%d]: ' "$((DS_COUNT-1))"
 read -r DS_IDX
 case "$DS_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
 [ "$DS_IDX" -lt "$DS_COUNT" ] || die "Invalid selection"
-DATASTORE=$(sed -n "$((DS_IDX+1))p" "$DS_FILE")
+SRC_DS=$(sed -n "$((DS_IDX+1))p" "$DS_FILE")
 
-# ── navigate to template VM (recursive folder browser) ───────────────────────
-NAV_DIR="$DATASTORE"
-TPL_DIR=""
-
-while [ -z "$TPL_DIR" ]; do
-  find "$NAV_DIR" -mindepth 1 -maxdepth 1 -type d | sort > "$FOLDER_FILE"
-  FOLDER_COUNT=$(wc -l < "$FOLDER_FILE")
-  VMX_HERE=$(find "$NAV_DIR" -maxdepth 1 -name '*.vmx' 2>/dev/null | head -1)
-
-  printf '\nLocation: %s\n' "$NAV_DIR"
-
-  TOTAL_OPTS=0
-  if [ -n "$VMX_HERE" ]; then
-    printf '  [0] *** Use this folder as template ***\n'
-    i=1
-    while IFS= read -r folder; do
-      printf '  [%d] %s\n' "$i" "$(basename "$folder")"
-      i=$((i+1))
-    done < "$FOLDER_FILE"
-    TOTAL_OPTS=$((1 + FOLDER_COUNT))
-  else
-    i=0
-    while IFS= read -r folder; do
-      printf '  [%d] %s\n' "$i" "$(basename "$folder")"
-      i=$((i+1))
-    done < "$FOLDER_FILE"
-    TOTAL_OPTS=$FOLDER_COUNT
-  fi
-
-  [ "$TOTAL_OPTS" -gt 0 ] || die "No subfolders and no VM found in $NAV_DIR"
-
-  printf 'Select [0-%d]: ' "$((TOTAL_OPTS-1))"
-  read -r SEL
-  case "$SEL" in ''|*[!0-9]*) die "Invalid selection" ;; esac
-  [ "$SEL" -lt "$TOTAL_OPTS" ] || die "Invalid selection"
-
-  if [ -n "$VMX_HERE" ] && [ "$SEL" -eq 0 ]; then
-    TPL_DIR="$NAV_DIR"
-  elif [ -n "$VMX_HERE" ]; then
-    NAV_DIR=$(sed -n "${SEL}p" "$FOLDER_FILE")
-  else
-    NAV_DIR=$(sed -n "$((SEL+1))p" "$FOLDER_FILE")
-  fi
-done
+# ── navigate to template VM ───────────────────────────────────────────────────
+printf '\n=== SOURCE: navigate to template VM folder ===\n'
+TPL_DIR=$(browse_dir "$SRC_DS" vmx)
 
 TPL_NAME=$(basename "$TPL_DIR")
-TPL_PARENT=$(dirname "$TPL_DIR")
 TPL_VMX=$(find  "$TPL_DIR" -maxdepth 1 -name '*.vmx'                        | head -1)
 TPL_VMDK=$(find "$TPL_DIR" -maxdepth 1 -name '*.vmdk' ! -name '*-flat.vmdk' | head -1)
 [ -f "$TPL_VMX"  ] || die "No .vmx found in $TPL_DIR"
 [ -f "$TPL_VMDK" ] || die "No .vmdk descriptor found in $TPL_DIR"
-# base name of the vmdk file itself (e.g. LERN-ST-IMG-01, not the folder LERN-ST-IMG-21)
 VMDK_BASE=$(basename "$TPL_VMDK" .vmdk)
+
+# ── select destination datastore ─────────────────────────────────────────────
+printf '\n=== DESTINATION: select datastore ===\n'
+i=0
+while IFS= read -r ds; do
+  printf '  [%d] %s\n' "$i" "$ds"
+  i=$((i+1))
+done < "$DS_FILE"
+
+printf 'Select datastore [0-%d]: ' "$((DS_COUNT-1))"
+read -r DST_DS_IDX
+case "$DST_DS_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
+[ "$DST_DS_IDX" -lt "$DS_COUNT" ] || die "Invalid selection"
+DST_DS=$(sed -n "$((DST_DS_IDX+1))p" "$DS_FILE")
+
+# ── navigate to destination parent folder ────────────────────────────────────
+printf '\n=== DESTINATION: navigate to target parent folder ===\n'
+DEST_PARENT=$(browse_dir "$DST_DS" any)
 
 # ── number of clones ──────────────────────────────────────────────────────────
 printf '\nHow many clones to create (1-15): '
@@ -102,7 +134,7 @@ while [ "$i" -le "$CLONE_COUNT" ]; do
   printf '  Name for clone %d: ' "$i"
   read -r cname
   [ -n "$cname" ] || die "Name cannot be empty"
-  [ ! -d "$TPL_PARENT/$cname" ] || die "Folder '$TPL_PARENT/$cname' already exists"
+  [ ! -d "$DEST_PARENT/$cname" ] || die "Folder '$DEST_PARENT/$cname' already exists"
   printf '%s\n' "$cname" >> "$NAMES_FILE"
   i=$((i+1))
 done
@@ -122,13 +154,14 @@ case "${PROV_IDX:-1}" in
 esac
 
 printf '\n'
-log "Template : $TPL_DIR"
-log "Disk type: $PROV"
+log "Template  : $TPL_DIR"
+log "Dest root : $DEST_PARENT"
+log "Disk type : $PROV"
 printf '\n'
 
 # ── clone loop ────────────────────────────────────────────────────────────────
 while IFS= read -r CLONE_NAME; do
-  DEST_DIR="$TPL_PARENT/$CLONE_NAME"
+  DEST_DIR="$DEST_PARENT/$CLONE_NAME"
   log ">>> Starting clone: $TPL_NAME  ->  $CLONE_NAME"
 
   mkdir -p "$DEST_DIR"
