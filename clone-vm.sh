@@ -15,11 +15,31 @@ FOLDER_FILE=/tmp/_esxi_folders.$$
 NAMES_FILE=/tmp/_esxi_names.$$
 trap 'rm -f "$DS_FILE" "$FOLDER_FILE" "$NAMES_FILE"' EXIT
 
+# ── build datastore list: "friendly_name|resolved_path" ──────────────────────
+find /vmfs/volumes -mindepth 1 -maxdepth 1 -type l | sort | while IFS= read -r link; do
+  printf '%s|%s\n' "$(basename "$link")" "$(readlink -f "$link")"
+done > "$DS_FILE"
+DS_COUNT=$(wc -l < "$DS_FILE")
+[ "$DS_COUNT" -gt 0 ] || die "No datastores found under /vmfs/volumes"
+
+# ── print_datastores: display friendly name list ──────────────────────────────
+print_datastores() {
+  i=0
+  while IFS='|' read -r _name _path; do
+    printf '  [%d] %s\n' "$i" "$_name"
+    i=$((i+1))
+  done < "$DS_FILE"
+}
+
+# ── pick_ds_path: return resolved path for index ─────────────────────────────
+pick_ds_field() {
+  awk -F'|' -v n="$(($1+1))" -v f="$2" 'NR==n{print $f}' "$DS_FILE"
+}
+
 # ── browse_dir: interactive folder browser ────────────────────────────────────
-# Usage: browse_dir <start_dir> <stop_mode>
+# Usage: result=$(browse_dir <start_dir> <stop_mode>)
 #   stop_mode=vmx   — offer "use this folder" only when a .vmx is present
-#   stop_mode=any   — always offer "use this folder" option
-# Prints the selected path to stdout; all prompts go to /dev/tty
+#   stop_mode=any   — always offer "use this folder"
 browse_dir() {
   _bd_dir="$1"
   _bd_mode="$2"
@@ -31,7 +51,7 @@ browse_dir() {
     if [ "$_bd_mode" = "vmx" ]; then
       _bd_vmx=$(find "$_bd_dir" -maxdepth 1 -name '*.vmx' 2>/dev/null | head -1)
     else
-      _bd_vmx="yes"   # always show the "use this folder" option
+      _bd_vmx="yes"
     fi
 
     printf '\nLocation: %s\n' "$_bd_dir" >/dev/tty
@@ -72,25 +92,16 @@ browse_dir() {
   done
 }
 
-# ── select source datastore ───────────────────────────────────────────────────
-find /vmfs/volumes -mindepth 1 -maxdepth 1 -type d -not -type l 2>/dev/null | sort > "$DS_FILE"
-DS_COUNT=$(wc -l < "$DS_FILE")
-[ "$DS_COUNT" -gt 0 ] || die "No datastores found under /vmfs/volumes"
-
+# ── source datastore + template ───────────────────────────────────────────────
 printf '\n=== SOURCE: select datastore ===\n'
-i=0
-while IFS= read -r ds; do
-  printf '  [%d] %s\n' "$i" "$ds"
-  i=$((i+1))
-done < "$DS_FILE"
-
+print_datastores
 printf 'Select datastore [0-%d]: ' "$((DS_COUNT-1))"
 read -r DS_IDX
 case "$DS_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
 [ "$DS_IDX" -lt "$DS_COUNT" ] || die "Invalid selection"
-SRC_DS=$(sed -n "$((DS_IDX+1))p" "$DS_FILE")
+SRC_DS=$(pick_ds_field "$DS_IDX" 2)
+SRC_DS_NAME=$(pick_ds_field "$DS_IDX" 1)
 
-# ── navigate to template VM ───────────────────────────────────────────────────
 printf '\n=== SOURCE: navigate to template VM folder ===\n'
 TPL_DIR=$(browse_dir "$SRC_DS" vmx)
 
@@ -101,21 +112,16 @@ TPL_VMDK=$(find "$TPL_DIR" -maxdepth 1 -name '*.vmdk' ! -name '*-flat.vmdk' | he
 [ -f "$TPL_VMDK" ] || die "No .vmdk descriptor found in $TPL_DIR"
 VMDK_BASE=$(basename "$TPL_VMDK" .vmdk)
 
-# ── select destination datastore ─────────────────────────────────────────────
+# ── destination datastore + folder ───────────────────────────────────────────
 printf '\n=== DESTINATION: select datastore ===\n'
-i=0
-while IFS= read -r ds; do
-  printf '  [%d] %s\n' "$i" "$ds"
-  i=$((i+1))
-done < "$DS_FILE"
-
+print_datastores
 printf 'Select datastore [0-%d]: ' "$((DS_COUNT-1))"
 read -r DST_DS_IDX
 case "$DST_DS_IDX" in ''|*[!0-9]*) die "Invalid selection" ;; esac
 [ "$DST_DS_IDX" -lt "$DS_COUNT" ] || die "Invalid selection"
-DST_DS=$(sed -n "$((DST_DS_IDX+1))p" "$DS_FILE")
+DST_DS=$(pick_ds_field "$DST_DS_IDX" 2)
+DST_DS_NAME=$(pick_ds_field "$DST_DS_IDX" 1)
 
-# ── navigate to destination parent folder ────────────────────────────────────
 printf '\n=== DESTINATION: navigate to target parent folder ===\n'
 DEST_PARENT=$(browse_dir "$DST_DS" any)
 
@@ -154,8 +160,8 @@ case "${PROV_IDX:-1}" in
 esac
 
 printf '\n'
-log "Template  : $TPL_DIR"
-log "Dest root : $DEST_PARENT"
+log "Template  : $TPL_NAME  (on $SRC_DS_NAME)"
+log "Dest root : $DEST_PARENT  (on $DST_DS_NAME)"
 log "Disk type : $PROV"
 printf '\n'
 
