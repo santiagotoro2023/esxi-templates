@@ -103,6 +103,9 @@ Select [1-3, default=1]:
 
 The script then clones all VMs, patches their configs, and registers them. Done.
 
+### 5. Choose destination folder
+```
+
 ---
 
 ## What gets copied
