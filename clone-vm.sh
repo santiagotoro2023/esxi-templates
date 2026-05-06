@@ -16,11 +16,18 @@ NAMES_FILE=/tmp/_esxi_names.$$
 trap 'rm -f "$DS_FILE" "$FOLDER_FILE" "$NAMES_FILE"' EXIT
 
 # ── build datastore list: "friendly_name|resolved_path" ──────────────────────
-find /vmfs/volumes -mindepth 1 -maxdepth 1 -type l | sort | while IFS= read -r link; do
-  printf '%s|%s\n' "$(basename "$link")" "$(readlink -f "$link")"
+# Skip UUID-named entries (two common ESXi UUID formats), keep only named ones
+for _link in /vmfs/volumes/*; do
+  _name=$(basename "$_link")
+  case "$_name" in
+    ????????-????-????-????-????????????) continue ;;
+    ????????-????????-????-????????????) continue ;;
+  esac
+  _resolved=$(readlink -f "$_link" 2>/dev/null) || continue
+  printf '%s|%s\n' "$_name" "$_resolved"
 done > "$DS_FILE"
 DS_COUNT=$(wc -l < "$DS_FILE")
-[ "$DS_COUNT" -gt 0 ] || die "No datastores found under /vmfs/volumes"
+[ "$DS_COUNT" -gt 0 ] || die "No named datastores found under /vmfs/volumes"
 
 # ── print_datastores: display friendly name list ──────────────────────────────
 print_datastores() {
@@ -31,7 +38,7 @@ print_datastores() {
   done < "$DS_FILE"
 }
 
-# ── pick_ds_path: return resolved path for index ─────────────────────────────
+# ── pick_ds_field <index> <field>: extract field 1=name 2=path ───────────────
 pick_ds_field() {
   awk -F'|' -v n="$(($1+1))" -v f="$2" 'NR==n{print $f}' "$DS_FILE"
 }
