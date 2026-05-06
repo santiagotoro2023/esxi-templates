@@ -1,7 +1,6 @@
 #!/bin/sh
 # clone-vm.sh — Clone one or more ESXi VMs from a template
-# Requires: vmkfstools, vim-cmd (ESXi shell) — POSIX sh only, no bash needed
-
+# Santiago Toro - 06.05.2026 - Optimisiert durch Claude :)
 set -eu
 
 VMKFSTOOLS=/bin/vmkfstools
