@@ -197,8 +197,11 @@ while IFS= read -r CLONE_NAME; do
   [ -n "$NEW_VM_UUID" ] || die "UUID generation failed for uuid.location"
   NEW_BIOS_UUID=$(gen_vmware_uuid)
   [ -n "$NEW_BIOS_UUID" ] || die "UUID generation failed for uuid.bios"
+  NEW_VC_UUID=$(gen_vmware_uuid)
+  [ -n "$NEW_VC_UUID" ] || die "UUID generation failed for vc.uuid"
   log "    uuid.location : $NEW_VM_UUID"
   log "    uuid.bios     : $NEW_BIOS_UUID"
+  log "    vc.uuid       : $NEW_VC_UUID"
 
   mkdir -p "$DEST_DIR"
 
@@ -233,6 +236,7 @@ while IFS= read -r CLONE_NAME; do
   # overriding them with a host-MAC-derived value at registration time.
   printf 'uuid.location = "%s"\n' "$NEW_VM_UUID"   >> "$DEST_VMX"
   printf 'uuid.bios = "%s"\n'     "$NEW_BIOS_UUID"  >> "$DEST_VMX"
+  printf 'vc.uuid = "%s"\n'       "$NEW_VC_UUID"    >> "$DEST_VMX"
   printf 'uuid.action = "keep"\n'                   >> "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
