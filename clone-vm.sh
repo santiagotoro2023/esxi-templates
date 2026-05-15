@@ -10,6 +10,16 @@ VIMCMD=/bin/vim-cmd
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
+# Generate a random UUID in VMware VMX format: "XX XX XX XX XX XX XX XX-XX XX XX XX XX XX XX XX"
+gen_vmware_uuid() {
+  od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | \
+    awk '{s=$0; printf "%s %s %s %s %s %s %s %s-%s %s %s %s %s %s %s %s\n",
+      substr(s,1,2),  substr(s,3,2),  substr(s,5,2),  substr(s,7,2),
+      substr(s,9,2),  substr(s,11,2), substr(s,13,2), substr(s,15,2),
+      substr(s,17,2), substr(s,19,2), substr(s,21,2), substr(s,23,2),
+      substr(s,25,2), substr(s,27,2), substr(s,29,2), substr(s,31,2)}'
+}
+
 DS_FILE=/tmp/_esxi_ds.$$
 FOLDER_FILE=/tmp/_esxi_folders.$$
 NAMES_FILE=/tmp/_esxi_names.$$
@@ -176,6 +186,8 @@ printf '\n'
 while IFS= read -r CLONE_NAME; do
   DEST_DIR="$DEST_PARENT/$CLONE_NAME"
   log ">>> Starting clone: $TPL_NAME  ->  $CLONE_NAME"
+  NEW_VM_UUID=$(gen_vmware_uuid)
+  NEW_BIOS_UUID=$(gen_vmware_uuid)
 
   mkdir -p "$DEST_DIR"
 
@@ -205,6 +217,8 @@ while IFS= read -r CLONE_NAME; do
     -e '/^uuid\.bios /d' \
     -e '/^vc\.uuid /d' \
     "$TPL_VMX" > "$DEST_VMX"
+  printf 'uuid.location = "%s"\n' "$NEW_VM_UUID"  >> "$DEST_VMX"
+  printf 'uuid.bios = "%s"\n'     "$NEW_BIOS_UUID" >> "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
   VMID=$("$VIMCMD" solo/registervm "$DEST_VMX")
