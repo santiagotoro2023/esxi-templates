@@ -201,6 +201,9 @@ while IFS= read -r CLONE_NAME; do
     -e "s|\"[^\"]*${VMDK_BASE}\.vmdk\"|\"${CLONE_NAME}.vmdk\"|g" \
     -e "s|nvram = \"[^\"]*${VMDK_BASE}[^\"]*\"|nvram = \"${CLONE_NAME}.nvram\"|g" \
     -e "s|extendedConfigFile = \"[^\"]*${VMDK_BASE}[^\"]*\"|extendedConfigFile = \"${CLONE_NAME}.vmxf\"|g" \
+    -e '/^uuid\.location /d' \
+    -e '/^uuid\.bios /d' \
+    -e '/^vc\.uuid /d' \
     "$TPL_VMX" > "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
