@@ -222,9 +222,13 @@ while IFS= read -r CLONE_NAME; do
     -e '/^uuid\.location /d' \
     -e '/^uuid\.bios /d' \
     -e '/^vc\.uuid /d' \
+    -e '/^uuid\.action /d' \
     "$TPL_VMX" > "$DEST_VMX"
-  printf 'uuid.location = "%s"\n' "$NEW_VM_UUID"  >> "$DEST_VMX"
-  printf 'uuid.bios = "%s"\n'     "$NEW_BIOS_UUID" >> "$DEST_VMX"
+  # uuid.action = "keep" tells ESXi to use our UUIDs verbatim instead of
+  # overriding them with a host-MAC-derived value at registration time.
+  printf 'uuid.location = "%s"\n' "$NEW_VM_UUID"   >> "$DEST_VMX"
+  printf 'uuid.bios = "%s"\n'     "$NEW_BIOS_UUID"  >> "$DEST_VMX"
+  printf 'uuid.action = "keep"\n'                   >> "$DEST_VMX"
   log "    vmx patched -> $DEST_VMX"
 
   VMID=$("$VIMCMD" solo/registervm "$DEST_VMX")
