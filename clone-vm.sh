@@ -11,16 +11,19 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
 # Generate a random UUID in VMware VMX format: "XX XX XX XX XX XX XX XX-XX XX XX XX XX XX XX XX"
-# Uses /proc/sys/kernel/random/uuid which is reliable on ESXi
+# Uses only dd + od + awk — the only tools reliably available on ESXi busybox
 gen_vmware_uuid() {
-  _u=$(tr -d '-\n' < /proc/sys/kernel/random/uuid)
-  [ ${#_u} -eq 32 ] || die "UUID generation failed (got: '$_u')"
-  printf '%s\n' "$_u" | awk '{
+  dd if=/dev/urandom bs=16 count=1 2>/dev/null | od -An -tx1 | awk '
+  {
+    for (i = 1; i <= NF; i++) s = s $i
+  }
+  END {
+    s = substr(s, 1, 32)
     printf "%s %s %s %s %s %s %s %s-%s %s %s %s %s %s %s %s\n",
-      substr($0,1,2),  substr($0,3,2),  substr($0,5,2),  substr($0,7,2),
-      substr($0,9,2),  substr($0,11,2), substr($0,13,2), substr($0,15,2),
-      substr($0,17,2), substr($0,19,2), substr($0,21,2), substr($0,23,2),
-      substr($0,25,2), substr($0,27,2), substr($0,29,2), substr($0,31,2)
+      substr(s,1,2),  substr(s,3,2),  substr(s,5,2),  substr(s,7,2),
+      substr(s,9,2),  substr(s,11,2), substr(s,13,2), substr(s,15,2),
+      substr(s,17,2), substr(s,19,2), substr(s,21,2), substr(s,23,2),
+      substr(s,25,2), substr(s,27,2), substr(s,29,2), substr(s,31,2)
   }'
 }
 
@@ -191,7 +194,9 @@ while IFS= read -r CLONE_NAME; do
   DEST_DIR="$DEST_PARENT/$CLONE_NAME"
   log ">>> Starting clone: $TPL_NAME  ->  $CLONE_NAME"
   NEW_VM_UUID=$(gen_vmware_uuid)
+  [ -n "$NEW_VM_UUID" ] || die "UUID generation failed for uuid.location"
   NEW_BIOS_UUID=$(gen_vmware_uuid)
+  [ -n "$NEW_BIOS_UUID" ] || die "UUID generation failed for uuid.bios"
   log "    uuid.location : $NEW_VM_UUID"
   log "    uuid.bios     : $NEW_BIOS_UUID"
 
